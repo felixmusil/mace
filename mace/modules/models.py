@@ -38,6 +38,7 @@ class MACE(torch.nn.Module):
         atomic_numbers: List[int],
         correlation: int,
         gate: Optional[Callable],
+        activation: torch.nn.Module = torch.nn.SiLU(),
     ):
         super().__init__()
         self.r_max = r_max
@@ -73,6 +74,7 @@ class MACE(torch.nn.Module):
             target_irreps=interaction_irreps,
             hidden_irreps=hidden_irreps,
             avg_num_neighbors=avg_num_neighbors,
+            activation=activation,
         )
         self.interactions = torch.nn.ModuleList([inter])
 
@@ -110,6 +112,7 @@ class MACE(torch.nn.Module):
                 target_irreps=interaction_irreps,
                 hidden_irreps=hidden_irreps_out,
                 avg_num_neighbors=avg_num_neighbors,
+                activation=activation,
             )
             self.interactions.append(inter)
             prod = EquivariantProductBasisBlock(
