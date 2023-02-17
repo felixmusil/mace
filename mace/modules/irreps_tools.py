@@ -1,7 +1,7 @@
 ###########################################################################################
 # Elementary tools for handling irreducible representations
 # Authors: Ilyes Batatia, Gregor Simm
-# This program is distributed under the ASL License (see ASL.md)
+# This program is distributed under the MIT License (see MIT.md)
 ###########################################################################################
 
 from typing import List, Tuple
@@ -39,6 +39,8 @@ def tp_out_irreps_with_instructions(
         for i_in1, i_in2, i_out, mode, train in instructions
     ]
 
+    instructions = sorted(instructions, key=lambda x: x[2])
+
     return irreps_out, instructions
 
 
@@ -64,14 +66,19 @@ def linear_out_irreps(irreps: o3.Irreps, target_irreps: o3.Irreps) -> o3.Irreps:
 class reshape_irreps(torch.nn.Module):
     def __init__(self, irreps: o3.Irreps) -> None:
         super().__init__()
-        self.irreps = irreps
+        self.irreps = o3.Irreps(irreps)
+        self.dims = []
+        self.muls = []
+        for mul, ir in self.irreps:
+            d = ir.dim
+            self.dims.append(d)
+            self.muls.append(mul)
 
     def forward(self, tensor: torch.Tensor) -> torch.Tensor:
         ix = 0
         out = []
         batch, _ = tensor.shape
-        for mul, ir in self.irreps:
-            d = ir.dim
+        for mul, d in zip(self.muls, self.dims):
             field = tensor[:, ix : ix + mul * d]  # [batch, sample, mul * repr]
             ix += mul * d
             field = field.reshape(batch, mul, d)
