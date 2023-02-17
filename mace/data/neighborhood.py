@@ -1,3 +1,9 @@
+###########################################################################################
+# Neighborhood construction
+# Authors: Ilyes Batatia, Gregor Simm
+# This program is distributed under the MIT License (see MIT.md)
+###########################################################################################
+
 from typing import Optional, Tuple
 
 import ase.neighborlist
@@ -10,7 +16,7 @@ def get_neighborhood(
     pbc: Optional[Tuple[bool, bool, bool]] = None,
     cell: Optional[np.ndarray] = None,  # [3, 3]
     true_self_interaction=False,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     if pbc is None:
         pbc = (False, False, False)
 
@@ -48,4 +54,4 @@ def get_neighborhood(
     # D = positions[j]-positions[i]+S.dot(cell)
     shifts = np.dot(unit_shifts, cell)  # [n_edges, 3]
 
-    return edge_index, shifts
+    return edge_index, shifts, unit_shifts
