@@ -28,7 +28,6 @@ disable = [
     "too-many-statements",
     "too-many-branches",
     "import-outside-toplevel",
-    "cell-var-from-loop",
     "duplicate-code",
 ]
 

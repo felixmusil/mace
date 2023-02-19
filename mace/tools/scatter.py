@@ -58,6 +58,7 @@ def scatter_std(
     dim_size: Optional[int] = None,
     unbiased: bool = True,
 ) -> torch.Tensor:
+
     if out is not None:
         dim_size = out.size(dim)
 

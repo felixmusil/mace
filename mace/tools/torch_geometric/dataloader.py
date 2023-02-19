@@ -71,6 +71,7 @@ class DataLoader(torch.utils.data.DataLoader):
         exclude_keys: Optional[List[str]] = [None],
         **kwargs,
     ):
+
         if "collate_fn" in kwargs:
             del kwargs["collate_fn"]
 
