@@ -18,7 +18,7 @@ from .blocks import (
     ScaleShiftBlock,
 )
 from .utils import compute_forces, get_edge_vectors_and_lengths
-
+from .exp_normal import ExpNormalBasis
 
 class MACE(torch.nn.Module):
     def __init__(
@@ -38,6 +38,7 @@ class MACE(torch.nn.Module):
         atomic_numbers: List[int],
         correlation: int,
         gate: Optional[Callable],
+        radial_embeding_cls: str = "RadialEmbeddingBlock",
         activation: torch.nn.Module = torch.nn.SiLU(),
     ):
         super().__init__()
@@ -49,11 +50,18 @@ class MACE(torch.nn.Module):
         self.node_embedding = LinearNodeEmbeddingBlock(
             irreps_in=node_attr_irreps, irreps_out=node_feats_irreps
         )
-        self.radial_embedding = RadialEmbeddingBlock(
-            r_max=r_max,
-            num_bessel=num_bessel,
-            num_polynomial_cutoff=num_polynomial_cutoff,
-        )
+        if radial_embeding_cls == "RadialEmbeddingBlock":
+            self.radial_embedding = RadialEmbeddingBlock(
+                r_max=r_max,
+                num_bessel=num_bessel,
+                num_polynomial_cutoff=num_polynomial_cutoff,
+            )
+        elif radial_embeding_cls == "ExpNormalBasis":
+            self.radial_embedding = ExpNormalBasis(
+                cutoff=r_max,
+                num_rbf=num_bessel,
+                trainable=False
+            )
         edge_feats_irreps = o3.Irreps(f"{self.radial_embedding.out_dim}x0e")
 
         sh_irreps = o3.Irreps.spherical_harmonics(max_ell)

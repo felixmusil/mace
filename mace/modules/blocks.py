@@ -15,7 +15,6 @@ from .irreps_tools import (
 from .radial import BesselBasis, PolynomialCutoff
 from .symmetric_contraction import SymmetricContraction
 
-
 class LinearNodeEmbeddingBlock(torch.nn.Module):
     def __init__(self, irreps_in: o3.Irreps, irreps_out: o3.Irreps):
         super().__init__()
@@ -90,7 +89,6 @@ class RadialEmbeddingBlock(torch.nn.Module):
         bessel = self.bessel_fn(edge_lengths)  # [n_edges, n_basis]
         cutoff = self.cutoff_fn(edge_lengths)  # [n_edges, 1]
         return bessel * cutoff  # [n_edges, n_basis]
-
 
 class EquivariantProductBasisBlock(torch.nn.Module):
     def __init__(
