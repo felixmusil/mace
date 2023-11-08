@@ -62,6 +62,13 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         "--r_max", help="distance cutoff (in Ang)", type=float, default=5.0
     )
     parser.add_argument(
+        "--radial_type",
+        help="type of radial basis functions",
+        type=str,
+        default="bessel",
+        choices=["bessel", "gaussian"],
+    )
+    parser.add_argument(
         "--num_radial_basis",
         help="number of radial basis functions",
         type=int,
@@ -80,6 +87,7 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         default="RealAgnosticResidualInteractionBlock",
         choices=[
             "RealAgnosticResidualInteractionBlock",
+            "RealAgnosticAttResidualInteractionBlock",
             "RealAgnosticInteractionBlock",
         ],
     )
@@ -109,10 +117,29 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         default="16x0e",
     )
     parser.add_argument(
+        "--radial_MLP",
+        help="width of the radial MLP",
+        type=str,
+        default="[64, 64, 64]",
+    )
+    parser.add_argument(
         "--hidden_irreps",
         help="irreps for hidden node states",
         type=str,
         default="128x0e + 128x1o",
+    )
+    # add option to specify irreps by channel number and max L
+    parser.add_argument(
+        "--num_channels",
+        help="number of embedding channels",
+        type=int,
+        default=None,
+    )
+    parser.add_argument(
+        "--max_L",
+        help="max L equivariance of the message",
+        type=int,
+        default=None,
     )
     parser.add_argument(
         "--gate",
@@ -189,16 +216,25 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         "--loss",
         help="type of loss",
         default="weighted",
-        choices=["ef", "weighted", "forces_only"],
+        choices=[
+            "ef",
+            "weighted",
+            "forces_only",
+            "virials",
+            "stress",
+            "dipole",
+            "huber",
+            "energy_forces_dipole",
+        ],
     )
     parser.add_argument(
-        "--forces_weight", help="weight of forces loss", type=float, default=10.0
+        "--forces_weight", help="weight of forces loss", type=float, default=100.0
     )
     parser.add_argument(
         "--swa_forces_weight",
         help="weight of forces loss after starting swa",
         type=float,
-        default=1.0,
+        default=100.0,
     )
     parser.add_argument(
         "--energy_weight", help="weight of energy loss", type=float, default=1.0
@@ -214,6 +250,12 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         help="String of dictionary containing the weights for each config type",
         type=str,
         default='{"Default":1.0}',
+    )
+    parser.add_argument(
+        "--huber_delta",
+        help="delta parameter for huber loss",
+        type=float,
+        default=0.01,
     )
     parser.add_argument(
         "--optimizer",

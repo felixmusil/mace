@@ -70,3 +70,50 @@ def get_complex_default_dtype():
         return torch.complex64
 
     raise NotImplementedError
+
+
+def spherical_to_cartesian(t: torch.Tensor):
+    """
+    Convert spherical notation to cartesian notation
+    """
+    stress_cart_tensor = CartesianTensor("ij=ji")
+    stress_rtp = stress_cart_tensor.reduced_tensor_products()
+    return stress_cart_tensor.to_cartesian(t, rtp=stress_rtp)
+
+
+def cartesian_to_spherical(t: torch.Tensor):
+    """
+    Convert cartesian notation to spherical notation
+    """
+    stress_cart_tensor = CartesianTensor("ij=ji")
+    stress_rtp = stress_cart_tensor.reduced_tensor_products()
+    return stress_cart_tensor.to_cartesian(t, rtp=stress_rtp)
+
+
+def voigt_to_matrix(t: torch.Tensor):
+    """
+    Convert voigt notation to matrix notation
+    :param t: (6,) tensor or (3, 3) tensor
+    :return: (3, 3) tensor
+    """
+    if t.shape == (3, 3):
+        return t
+    if t.shape == (6,):
+        return torch.tensor(
+            [
+                [t[0], t[5], t[4]],
+                [t[5], t[1], t[3]],
+                [t[4], t[3], t[2]],
+            ],
+            dtype=t.dtype,
+        )
+
+    raise ValueError(
+        f"Stress tensor must be of shape (6,) or (3, 3), but has shape {t.shape}"
+    )
+
+
+def init_wandb(project: str, entity: str, name: str, config: dict):
+    import wandb
+
+    wandb.init(project=project, entity=entity, name=name, config=config)

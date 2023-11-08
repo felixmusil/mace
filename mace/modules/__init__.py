@@ -12,14 +12,30 @@ from .blocks import (
     LinearReadoutBlock,
     NonLinearReadoutBlock,
     RadialEmbeddingBlock,
+    RealAgnosticAttResidualInteractionBlock,
     RealAgnosticInteractionBlock,
     RealAgnosticResidualInteractionBlock,
     ResidualElementDependentInteractionBlock,
     ScaleShiftBlock,
 )
-from .loss import EnergyForcesLoss, WeightedEnergyForcesLoss, WeightedForcesLoss
-from .models import MACE, BOTNet, ScaleShiftBOTNet, ScaleShiftMACE
-from .radial import BesselBasis, PolynomialCutoff
+from .loss import (
+    DipoleSingleLoss,
+    WeightedEnergyForcesDipoleLoss,
+    WeightedEnergyForcesLoss,
+    WeightedEnergyForcesStressLoss,
+    WeightedEnergyForcesVirialsLoss,
+    WeightedForcesLoss,
+    WeightedHuberEnergyForcesStressLoss,
+)
+from .models import (
+    MACE,
+    AtomicDipolesMACE,
+    BOTNet,
+    EnergyDipolesMACE,
+    ScaleShiftBOTNet,
+    ScaleShiftMACE,
+)
+from .radial import BesselBasis, GaussianBasis, PolynomialCutoff
 from .symmetric_contraction import SymmetricContraction
 from .utils import (
     compute_avg_num_neighbors,
@@ -32,6 +48,7 @@ interaction_classes: Dict[str, Type[InteractionBlock]] = {
     "ResidualElementDependentInteractionBlock": ResidualElementDependentInteractionBlock,
     "AgnosticResidualNonlinearInteractionBlock": AgnosticResidualNonlinearInteractionBlock,
     "RealAgnosticResidualInteractionBlock": RealAgnosticResidualInteractionBlock,
+    "RealAgnosticAttResidualInteractionBlock": RealAgnosticAttResidualInteractionBlock,
     "RealAgnosticInteractionBlock": RealAgnosticInteractionBlock,
 }
 
@@ -43,7 +60,7 @@ scaling_classes: Dict[str, Callable] = {
 gate_dict: Dict[str, Optional[Callable]] = {
     "abs": torch.abs,
     "tanh": torch.tanh,
-    "silu": torch.nn.functional.silu,
+    "silu": torch.nn.SiLU(),
     "None": None,
 }
 
@@ -58,13 +75,20 @@ __all__ = [
     "NonLinearReadoutBlock",
     "PolynomialCutoff",
     "BesselBasis",
+    "GaussianBasis",
     "MACE",
     "ScaleShiftMACE",
     "BOTNet",
     "ScaleShiftBOTNet",
-    "EnergyForcesLoss",
+    "AtomicDipolesMACE",
+    "EnergyDipolesMACE",
     "WeightedEnergyForcesLoss",
     "WeightedForcesLoss",
+    "WeightedEnergyForcesVirialsLoss",
+    "WeightedEnergyForcesStressLoss",
+    "DipoleSingleLoss",
+    "WeightedEnergyForcesDipoleLoss",
+    "WeightedHuberEnergyForcesStressLoss",
     "SymmetricContraction",
     "interaction_classes",
     "compute_mean_std_atomic_inter_energy",

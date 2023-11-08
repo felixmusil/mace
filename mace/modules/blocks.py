@@ -1,5 +1,11 @@
+###########################################################################################
+# Elementary Block for Building O(3) Equivariant Higher Order Message Passing Neural Network
+# Authors: Ilyes Batatia, Gregor Simm
+# This program is distributed under the MIT License (see MIT.md)
+###########################################################################################
+
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import torch.nn.functional
@@ -12,7 +18,7 @@ from .irreps_tools import (
     reshape_irreps,
     tp_out_irreps_with_instructions,
 )
-from .radial import BesselBasis, PolynomialCutoff
+from .radial import BesselBasis, GaussianBasis, PolynomialCutoff
 from .symmetric_contraction import SymmetricContraction
 
 
@@ -77,9 +83,18 @@ class AtomicEnergiesBlock(torch.nn.Module):
 
 
 class RadialEmbeddingBlock(torch.nn.Module):
-    def __init__(self, r_max: float, num_bessel: int, num_polynomial_cutoff: int):
+    def __init__(
+        self,
+        r_max: float,
+        num_bessel: int,
+        num_polynomial_cutoff: int,
+        radial_type: str = "bessel",
+    ):
         super().__init__()
-        self.bessel_fn = BesselBasis(r_max=r_max, num_basis=num_bessel)
+        if radial_type == "bessel":
+            self.bessel_fn = BesselBasis(r_max=r_max, num_basis=num_bessel)
+        elif radial_type == "gaussian":
+            self.bessel_fn = GaussianBasis(r_max=r_max, num_basis=num_bessel)
         self.cutoff_fn = PolynomialCutoff(r_max=r_max, p=num_polynomial_cutoff)
         self.out_dim = num_bessel
 
@@ -87,9 +102,9 @@ class RadialEmbeddingBlock(torch.nn.Module):
         self,
         edge_lengths: torch.Tensor,  # [n_edges, 1]
     ):
-        bessel = self.bessel_fn(edge_lengths)  # [n_edges, n_basis]
+        radial = self.bessel_fn(edge_lengths)  # [n_edges, n_basis]
         cutoff = self.cutoff_fn(edge_lengths)  # [n_edges, 1]
-        return bessel * cutoff  # [n_edges, n_basis]
+        return radial * cutoff  # [n_edges, n_basis]
 
 
 class EquivariantProductBasisBlock(torch.nn.Module):
@@ -140,7 +155,8 @@ class InteractionBlock(ABC, torch.nn.Module):
         target_irreps: o3.Irreps,
         hidden_irreps: o3.Irreps,
         avg_num_neighbors: float,
-        activation:torch.nn.Module=torch.nn.SiLU(),
+        activation:Optional[torch.nn.Module] = None,
+        radial_MLP: Optional[List[int]] = None,
     ) -> None:
         super().__init__()
         self.node_attrs_irreps = node_attrs_irreps
@@ -150,7 +166,13 @@ class InteractionBlock(ABC, torch.nn.Module):
         self.target_irreps = target_irreps
         self.hidden_irreps = hidden_irreps
         self.avg_num_neighbors = avg_num_neighbors
+
+        if activation is None:
+            activation = torch.nn.SiLU()
         self.activation = activation
+        if radial_MLP is None:
+            radial_MLP = [64, 64, 64]
+        self.radial_MLP = radial_MLP
 
         self._setup()
 
@@ -286,7 +308,7 @@ class AgnosticNonlinearInteractionBlock(InteractionBlock):
         # Convolution weights
         input_dim = self.edge_feats_irreps.num_irreps
         self.conv_tp_weights = nn.FullyConnectedNet(
-            [input_dim] + 3 * [64] + [self.conv_tp.weight_numel],
+            [input_dim] + self.radial_MLP + [self.conv_tp.weight_numel],
             self.activation,
         )
 
@@ -351,7 +373,7 @@ class AgnosticResidualNonlinearInteractionBlock(InteractionBlock):
         # Convolution weights
         input_dim = self.edge_feats_irreps.num_irreps
         self.conv_tp_weights = nn.FullyConnectedNet(
-            [input_dim] + 3 * [64] + [self.conv_tp.weight_numel],
+            [input_dim] + self.radial_MLP + [self.conv_tp.weight_numel],
             self.activation,
         )
 
@@ -419,7 +441,7 @@ class RealAgnosticInteractionBlock(InteractionBlock):
         # Convolution weights
         input_dim = self.edge_feats_irreps.num_irreps
         self.conv_tp_weights = nn.FullyConnectedNet(
-            [input_dim] + 3 * [64] + [self.conv_tp.weight_numel],
+            [input_dim] + self.radial_MLP + [self.conv_tp.weight_numel],
             self.activation,
         )
 
@@ -491,7 +513,7 @@ class RealAgnosticResidualInteractionBlock(InteractionBlock):
         # Convolution weights
         input_dim = self.edge_feats_irreps.num_irreps
         self.conv_tp_weights = nn.FullyConnectedNet(
-            [input_dim] + 3 * [64] + [self.conv_tp.weight_numel],
+            [input_dim] + self.radial_MLP + [self.conv_tp.weight_numel],
             self.activation,
         )
 
@@ -535,6 +557,100 @@ class RealAgnosticResidualInteractionBlock(InteractionBlock):
         )  # [n_nodes, channels, (lmax + 1)**2]
 
 
+@compile_mode("script")
+class RealAgnosticAttResidualInteractionBlock(InteractionBlock):
+    def _setup(self) -> None:
+        self.node_feats_down_irreps = o3.Irreps("64x0e")
+        # First linear
+        self.linear_up = o3.Linear(
+            self.node_feats_irreps,
+            self.node_feats_irreps,
+            internal_weights=True,
+            shared_weights=True,
+        )
+        # TensorProduct
+        irreps_mid, instructions = tp_out_irreps_with_instructions(
+            self.node_feats_irreps,
+            self.edge_attrs_irreps,
+            self.target_irreps,
+        )
+        self.conv_tp = o3.TensorProduct(
+            self.node_feats_irreps,
+            self.edge_attrs_irreps,
+            irreps_mid,
+            instructions=instructions,
+            shared_weights=False,
+            internal_weights=False,
+        )
+
+        # Convolution weights
+        self.linear_down = o3.Linear(
+            self.node_feats_irreps,
+            self.node_feats_down_irreps,
+            internal_weights=True,
+            shared_weights=True,
+        )
+        input_dim = (
+            self.edge_feats_irreps.num_irreps
+            + 2 * self.node_feats_down_irreps.num_irreps
+        )
+        self.conv_tp_weights = nn.FullyConnectedNet(
+            [input_dim] + 3 * [256] + [self.conv_tp.weight_numel],
+            self.activation,
+        )
+
+        # Linear
+        irreps_mid = irreps_mid.simplify()
+        self.irreps_out = self.target_irreps
+        self.linear = o3.Linear(
+            irreps_mid,
+            self.irreps_out,
+            internal_weights=True,
+            shared_weights=True,
+        )
+
+        self.reshape = reshape_irreps(self.irreps_out)
+
+        # Skip connection.
+        self.skip_linear = o3.Linear(self.node_feats_irreps, self.hidden_irreps)
+
+    def forward(
+        self,
+        node_attrs: torch.Tensor,
+        node_feats: torch.Tensor,
+        edge_attrs: torch.Tensor,
+        edge_feats: torch.Tensor,
+        edge_index: torch.Tensor,
+    ) -> Tuple[torch.Tensor, None]:
+        sender = edge_index[0]
+        receiver = edge_index[1]
+        num_nodes = node_feats.shape[0]
+        sc = self.skip_linear(node_feats)
+        node_feats_up = self.linear_up(node_feats)
+        node_feats_down = self.linear_down(node_feats)
+        augmented_edge_feats = torch.cat(
+            [
+                edge_feats,
+                node_feats_down[sender],
+                node_feats_down[receiver],
+            ],
+            dim=-1,
+        )
+        tp_weights = self.conv_tp_weights(augmented_edge_feats)
+        mji = self.conv_tp(
+            node_feats_up[sender], edge_attrs, tp_weights
+        )  # [n_edges, irreps]
+        message = scatter_sum(
+            src=mji, index=receiver, dim=0, dim_size=num_nodes
+        )  # [n_nodes, irreps]
+        message = self.linear(message) / self.avg_num_neighbors
+        return (
+            self.reshape(message),
+            sc,
+        )  # [n_nodes, channels, (lmax + 1)**2]
+
+
+@compile_mode("script")
 class ScaleShiftBlock(torch.nn.Module):
     def __init__(self, scale: float, shift: float):
         super().__init__()
