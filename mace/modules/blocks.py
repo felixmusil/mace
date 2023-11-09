@@ -5,10 +5,11 @@
 ###########################################################################################
 
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union, Dict
 
 import numpy as np
 import torch.nn.functional
+from e3nn.util.jit import compile_mode
 from e3nn import nn, o3
 
 from mace.tools.scatter import scatter_sum

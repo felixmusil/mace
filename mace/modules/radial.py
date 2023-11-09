@@ -1,3 +1,4 @@
+from e3nn.util.jit import compile_mode
 import numpy as np
 import torch
 
