@@ -41,14 +41,24 @@ def weighted_mean_squared_virials(ref: Batch, pred: TensorDict) -> torch.Tensor:
     )  # []
 
 def mean_squared_error_forces(ref: Batch, pred: TensorDict) -> torch.Tensor:
+    return torch.mean(torch.square(ref["forces"] - pred["forces"]))  # []
+
+def weighted_mean_squared_error_forces(ref: Batch, pred: TensorDict) -> torch.Tensor:
     # forces: [n_atoms, 3]
     configs_weight = torch.repeat_interleave(
         ref.weight, ref.ptr[1:] - ref.ptr[:-1]
     ).unsqueeze(
         -1
     )  # [n_atoms, 1]
+    configs_forces_weight = torch.repeat_interleave(
+        ref.forces_weight, ref.ptr[1:] - ref.ptr[:-1]
+    ).unsqueeze(
+        -1
+    )  # [n_atoms, 1]
     return torch.mean(
-        configs_weight * torch.square(ref["forces"] - pred["forces"])
+        configs_weight
+        * configs_forces_weight
+        * torch.square(ref["forces"] - pred["forces"])
     )  # []
 
 
