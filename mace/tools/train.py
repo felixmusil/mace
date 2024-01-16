@@ -26,7 +26,7 @@ from .utils import (
     compute_rel_rmse,
     compute_rmse,
 )
-
+from tqdm import tqdm
 
 @dataclasses.dataclass
 class SWAContainer:
@@ -88,7 +88,7 @@ def train(
                 swa.scheduler.step()
 
         # Train
-        for batch in train_loader:
+        for batch in tqdm(train_loader, desc=f"Epoch {epoch}train_loader ", leave=False, mininterval=30):
             _, opt_metrics = take_step(
                 model=model,
                 loss_fn=loss_fn,
@@ -126,8 +126,8 @@ def train(
             eval_metrics["epoch"] = epoch
             logger.log(eval_metrics)
             if log_errors == "PerAtomRMSE":
-                error_e = eval_metrics["rmse_e_per_atom"] * 1e3
-                error_f = eval_metrics["rmse_f"] * 1e3
+                error_e = eval_metrics.get("rmse_e_per_atom", 0.) * 1e3
+                error_f = eval_metrics.get("rmse_f", 0.) * 1e3
                 logging.info(
                     f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_E_per_atom={error_e:.1f} meV, RMSE_F={error_f:.1f} meV / A"
                 )
@@ -290,7 +290,7 @@ def evaluate(
     batch = None  # for pylint
 
     start_time = time.time()
-    for batch in data_loader:
+    for batch in tqdm(data_loader, desc=f"Eval ", leave=False, mininterval=30):
         batch = batch.to(device)
         batch_dict = batch.to_dict()
         output = model(

@@ -51,12 +51,14 @@ from mace.data import get_neighborhood, AtomicData
 from mace.tools import (
     atomic_numbers_to_indices,
     to_one_hot,
+    voigt_to_matrix,
+    AtomicNumberTable,
 )
 
 def make_atomic_data(config, z_table, cutoff):
     pbc = config.get("pbc", None)
     cell = config.get("cell", None)
-    edge_index, shifts = get_neighborhood(
+    edge_index, shifts, unit_shifts = get_neighborhood(
         positions=config.pos.cpu().numpy(), cutoff=cutoff, pbc=pbc, cell=cell
     )
     indices = atomic_numbers_to_indices(config.atom_types , z_table=z_table)
@@ -66,14 +68,40 @@ def make_atomic_data(config, z_table, cutoff):
     )
 
     cell = (
-        torch.tensor(cell, dtype=torch.get_default_dtype())
-        if cell is not None
-        else None
+        torch.tensor(config.cell, dtype=torch.get_default_dtype())
+        if config.get("cell") is not None
+        else torch.tensor(
+            3 * [0.0, 0.0, 0.0], dtype=torch.get_default_dtype()
+        ).view(3, 3)
     )
 
     weight = (
         torch.tensor(config.weight, dtype=torch.get_default_dtype())
         if config.get("weight") is not None
+        else None
+    )
+
+    energy_weight = (
+        torch.tensor(config.energy_weight, dtype=torch.get_default_dtype())
+        if config.get("energy_weight") is not None
+        else None
+    )
+
+    forces_weight = (
+        torch.tensor(config.forces_weight, dtype=torch.get_default_dtype())
+        if config.get("forces_weight") is not None
+        else None
+    )
+
+    stress_weight = (
+        torch.tensor(config.stress_weight, dtype=torch.get_default_dtype())
+        if config.get("stress_weight") is not None
+        else None
+    )
+
+    virials_weight = (
+        torch.tensor(config.virials_weight, dtype=torch.get_default_dtype())
+        if config.get("virials_weight") is not None
         else None
     )
 
@@ -87,16 +115,49 @@ def make_atomic_data(config, z_table, cutoff):
         if config.get("energy") is not None
         else None
     )
+    stress = (
+        voigt_to_matrix(
+            torch.tensor(config.stress, dtype=torch.get_default_dtype())
+        ).unsqueeze(0)
+        if config.get("stress") is not None
+        else None
+    )
+    virials = (
+        voigt_to_matrix(
+            torch.tensor(config.virials, dtype=torch.get_default_dtype())
+        ).unsqueeze(0)
+        if config.get("virials") is not None
+        else None
+    )
+    dipole = (
+        torch.tensor(config.dipole, dtype=torch.get_default_dtype()).unsqueeze(0)
+        if config.get("dipole") is not None
+        else None
+    )
+    charges = (
+        torch.tensor(config.charges, dtype=torch.get_default_dtype())
+        if config.get("charges") is not None
+        else None
+    )
 
     return AtomicData(
         edge_index=torch.tensor(edge_index, dtype=torch.long),
         positions=torch.tensor(config.pos, dtype=torch.get_default_dtype()),
         shifts=torch.tensor(shifts, dtype=torch.get_default_dtype()),
+        unit_shifts=torch.tensor(unit_shifts, dtype=torch.get_default_dtype()),
         cell=cell,
         node_attrs=one_hot,
         weight=weight,
+        energy_weight=energy_weight,
+        forces_weight=forces_weight,
+        stress_weight=stress_weight,
+        virials_weight=virials_weight,
         forces=forces,
         energy=energy,
+        stress=stress,
+        virials=virials,
+        dipole=dipole,
+        charges=charges,
     )
 
 class Collater:
