@@ -1,4 +1,4 @@
-from .arg_parser import build_default_arg_parser
+from .arg_parser import build_default_arg_parser, build_h5_arg_parser
 from .cg import U_matrix_real
 from .checkpoint import CheckpointHandler, CheckpointIO, CheckpointState
 from .torch_tools import (
@@ -34,6 +34,7 @@ __all__ = [
     "to_numpy",
     "to_one_hot",
     "build_default_arg_parser",
+    "build_h5_arg_parser",
     "set_seeds",
     "init_device",
     "setup_logger",
