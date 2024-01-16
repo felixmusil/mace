@@ -62,4 +62,4 @@ def get_neighborhood(
     # D = positions[j]-positions[i]+S.dot(cell)
     shifts = np.dot(unit_shifts, cell)  # [n_edges, 3]
 
-    return edge_index, shifts
+    return edge_index, shifts, unit_shifts
