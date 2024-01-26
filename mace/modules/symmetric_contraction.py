@@ -144,7 +144,8 @@ class Contraction(torch.nn.Module):
         if self.element_dependent:
             out = contract(
                 self.equation_main,
-                self.U_tensors(self.correlation),
+                # changed to allow ell == 0
+                torch.atleast_2d(self.U_tensors(self.correlation)),
                 self.weights[str(self.correlation)],
                 x,
                 y,
@@ -162,7 +163,8 @@ class Contraction(torch.nn.Module):
         else:
             out = contract(
                 self.equation_main,
-                self.U_tensors(self.correlation),
+                # changed to allow ell == 0
+                torch.atleast_2d(self.U_tensors(self.correlation)),
                 self.weights[str(self.correlation)],
                 x,
             )  # TODO: use optimize library and cuTENSOR  # pylint: disable=fixme

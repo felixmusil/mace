@@ -209,6 +209,7 @@ class InteractionBlock(ABC, torch.nn.Module):
         avg_num_neighbors: float,
         activation:Optional[torch.nn.Module] = None,
         radial_MLP: Optional[List[int]] = None,
+        identity_update: Optional[bool] = False,
     ) -> None:
         super().__init__()
         self.node_attrs_irreps = node_attrs_irreps
@@ -218,7 +219,8 @@ class InteractionBlock(ABC, torch.nn.Module):
         self.target_irreps = target_irreps
         self.hidden_irreps = hidden_irreps
         self.avg_num_neighbors = avg_num_neighbors
-
+        # to do: x = W'x + Wh if false or x = x + Wh if true
+        self.identity_update = identity_update
         if activation is None:
             activation = torch.nn.SiLU()
         self.activation = activation
@@ -537,6 +539,25 @@ class RealAgnosticInteractionBlock(InteractionBlock):
         )  # [n_nodes, channels, (lmax + 1)**2]
 
 
+@compile_mode("script")
+class padded_skip(torch.nn.Module):
+    def __init__(self, irreps_in: o3.Irreps, irreps_out: o3.Irreps) -> None:
+        super().__init__()
+        self.in_dim = o3.Irreps(irreps_in).dim
+        self.out_dim = o3.Irreps(irreps_out).dim
+        self.pad = True
+        if self.in_dim >= self.out_dim:
+            self.pad = False
+
+    def forward(self, tensor: torch.Tensor, aux: Optional[torch.Tensor] = None) -> torch.Tensor:
+        batch, _ = tensor.shape
+        if self.pad:
+            template = torch.zeros(batch, self.out_dim, device=tensor.device)
+            template[:, :self.in_dim] = tensor
+            return template
+        else:
+            return tensor[:, :self.out_dim]
+
 class RealAgnosticResidualInteractionBlock(InteractionBlock):
     def _setup(self) -> None:
 
@@ -577,10 +598,19 @@ class RealAgnosticResidualInteractionBlock(InteractionBlock):
         )
 
         # Selector TensorProduct
-        self.skip_tp = o3.FullyConnectedTensorProduct(
-            self.node_feats_irreps, self.node_attrs_irreps, self.hidden_irreps
-        )
+        if self.identity_update:
+            # make it compatible with max_L > 0 by padding x
+            # x_out should have dim of [n_atom, self.hidden_irreps.dim] with zeros if x.shape[-1] < self.hidden_irreps.dim
+            self.skip_tp = padded_skip(
+                self.node_feats_irreps, self.hidden_irreps
+            )
+        else:
+            self.skip_tp = o3.FullyConnectedTensorProduct(
+                self.node_feats_irreps, self.node_attrs_irreps, self.hidden_irreps
+            )
+
         self.reshape = reshape_irreps(self.irreps_out)
+
 
     def forward(
         self,

@@ -53,6 +53,8 @@ class MACE(torch.nn.Module):
         activation: Optional[torch.nn.Module] = None,
         radial_MLP: Optional[List[int]] = None,
         radial_type: Optional[str] = "bessel",
+        use_linear_readout:Optional[bool] = False,
+        element_dependent:Optional[bool] = True,
     ):
         super().__init__()
         self.register_buffer(
@@ -118,6 +120,7 @@ class MACE(torch.nn.Module):
             target_irreps=hidden_irreps,
             correlation=correlation[0],
             num_elements=num_elements,
+            element_dependent=element_dependent,
             use_sc=use_sc_first,
         )
         self.products = torch.nn.ModuleList([prod])
@@ -149,15 +152,20 @@ class MACE(torch.nn.Module):
                 target_irreps=hidden_irreps_out,
                 correlation=correlation[i + 1],
                 num_elements=num_elements,
+                element_dependent=element_dependent,
                 use_sc=True,
             )
             self.products.append(prod)
-            if i == num_interactions - 2:
-                self.readouts.append(
-                    NonLinearReadoutBlock(hidden_irreps_out, MLP_irreps, gate)
-                )
-            else:
+            if use_linear_readout:
                 self.readouts.append(LinearReadoutBlock(hidden_irreps))
+            else:
+                if i == num_interactions - 2:
+                    self.readouts.append(
+                        NonLinearReadoutBlock(hidden_irreps_out, MLP_irreps, gate)
+                    )
+                else:
+                    self.readouts.append(LinearReadoutBlock(hidden_irreps))
+
 
     def forward(self, data: AtomicData, training:bool=False,
         compute_force: bool = True,
