@@ -126,7 +126,10 @@ class MACE(torch.nn.Module):
         self.products = torch.nn.ModuleList([prod])
 
         self.readouts = torch.nn.ModuleList()
-        self.readouts.append(LinearReadoutBlock(hidden_irreps))
+        if num_interactions == 1:
+            self.readouts.append(NonLinearReadoutBlock(hidden_irreps_out, MLP_irreps, gate))
+        else:
+            self.readouts.append(LinearReadoutBlock(hidden_irreps))
 
         for i in range(num_interactions - 1):
             if i == num_interactions - 2:
