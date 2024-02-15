@@ -53,6 +53,7 @@ class MACE(torch.nn.Module):
         activation: Optional[torch.nn.Module] = None,
         radial_MLP: Optional[List[int]] = None,
         radial_type: Optional[str] = "bessel",
+        cutoff_type: Optional[str] = "polynomial",
         use_linear_readout:Optional[bool] = False,
         element_dependent:Optional[bool] = True,
     ):
@@ -82,6 +83,7 @@ class MACE(torch.nn.Module):
             num_bessel=num_bessel,
             num_polynomial_cutoff=num_polynomial_cutoff,
             radial_type=radial_type,
+            cutoff_type=cutoff_type,
         )
         edge_feats_irreps = o3.Irreps(f"{self.radial_embedding.out_dim}x0e")
 

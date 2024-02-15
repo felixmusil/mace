@@ -35,7 +35,7 @@ from .models import (
     ScaleShiftBOTNet,
     ScaleShiftMACE,
 )
-from .radial import BesselBasis, GaussianBasis, PolynomialCutoff
+from .radial import BesselBasis, GaussianBasis, ExpNormalBasis, PolynomialCutoff, CosineCutoff
 from .symmetric_contraction import SymmetricContraction
 from .utils import (
     compute_avg_num_neighbors,
