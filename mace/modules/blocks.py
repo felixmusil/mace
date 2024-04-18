@@ -144,12 +144,16 @@ class RadialEmbeddingBlock(torch.nn.Module):
         cutoff_type: str = "polynomial",
     ):
         super().__init__()
+
         if radial_type == "bessel":
             self.bessel_fn = BesselBasis(r_max=r_max, num_basis=num_bessel)
         elif radial_type == "gaussian":
             self.bessel_fn = GaussianBasis(r_max=r_max, num_basis=num_bessel)
         elif radial_type == "expnorm":
             self.bessel_fn = ExpNormalBasis(r_max=r_max, num_basis=num_bessel)
+        else:
+            raise NotImplementedError(f"radial_type={radial_type} cutoff_type={cutoff_type}")
+        
         if cutoff_type == "polynomial":
             self.cutoff_fn = PolynomialCutoff(r_max=r_max, p=num_polynomial_cutoff)
         elif cutoff_type == "cos":
