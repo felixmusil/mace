@@ -32,3 +32,19 @@ class DistributedEnvironment:
         )
         os.environ["LOCAL_RANK"] = os.environ["SLURM_LOCALID"]
         os.environ["RANK"] = os.environ["SLURM_PROCID"]
+
+class SingleGPUEnvironment:
+    def __init__(self):
+        self._setup_distr_env()
+        self.master_addr = os.environ["MASTER_ADDR"]
+        self.master_port = os.environ["MASTER_PORT"]
+        self.world_size = int(os.environ["WORLD_SIZE"])
+        self.local_rank = int(os.environ["LOCAL_RANK"])
+        self.rank = int(os.environ["RANK"])
+
+    def _setup_distr_env(self):
+        os.environ["MASTER_ADDR"] = "localhost"
+        os.environ["MASTER_PORT"] = os.environ.get("MASTER_PORT", "33333")
+        os.environ["WORLD_SIZE"] = "1"
+        os.environ["LOCAL_RANK"] = "0"
+        os.environ["RANK"] = "0"

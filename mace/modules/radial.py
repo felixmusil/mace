@@ -47,7 +47,8 @@ class BesselBasis(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # [..., 1]
         numerator = torch.sin(self.bessel_weights * x)  # [..., num_basis]
-        return self.prefactor * (numerator / x)
+        out = self.prefactor * (numerator / x)
+        return out
 
     def __repr__(self):
         return (
@@ -124,8 +125,8 @@ class ExpNormalBasis(torch.nn.Module):
 
         means, betas = self._initial_params()
         if trainable:
-            self.register_parameter("means", nn.Parameter(means))
-            self.register_parameter("betas", nn.Parameter(betas))
+            self.register_parameter("means", torch.nn.Parameter(means))
+            self.register_parameter("betas", torch.nn.Parameter(betas))
         else:
             self.register_buffer("means", means)
             self.register_buffer("betas", betas)
@@ -172,8 +173,7 @@ class ExpNormalBasis(torch.nn.Module):
             Distances expanded in the radial basis with shape (total_num_edges, num_basis)
         """
 
-        dist = dist.unsqueeze(-1)
-        return torch.exp(
+        out = torch.exp(
             -self.betas
             * (
                 torch.exp(self.alpha * (-dist))
@@ -181,6 +181,7 @@ class ExpNormalBasis(torch.nn.Module):
             )
             ** 2
         ) # [..., num_basis]
+        return out
 
 class CosineCutoff(torch.nn.Module):
 
@@ -202,7 +203,7 @@ class CosineCutoff(torch.nn.Module):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(r_max={self.r_max})"
-    
+
 @compile_mode("script")
 class PolynomialCutoff(torch.nn.Module):
     """

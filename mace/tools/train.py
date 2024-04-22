@@ -19,6 +19,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch_ema import ExponentialMovingAverage
 from torchmetrics import Metric
+from tqdm import tqdm
 
 from . import torch_geometric
 from .checkpoint import CheckpointHandler, CheckpointState
@@ -50,6 +51,11 @@ def valid_err_log(valid_loss, eval_metrics, logger, log_errors, epoch=None):
         error_f = eval_metrics["rmse_f"] * 1e3
         logging.info(
             f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_E_per_atom={error_e:.1f} meV, RMSE_F={error_f:.1f} meV / A"
+        )
+    elif log_errors == "ForceRMSE":
+        error_f = eval_metrics["rmse_f"]
+        logging.info(
+            f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_F={error_f:.1f}"
         )
     elif (
         log_errors == "PerAtomRMSEstressvirials"
@@ -153,7 +159,7 @@ def train(
             device=device,
         )
         valid_err_log(valid_loss, eval_metrics, logger, log_errors, None)
-
+    if rank == 0: pbar = tqdm(desc="Training Epoch", total=max_num_epochs-epoch)
     while epoch < max_num_epochs:
         # LR scheduler and SWA update
         if swa is None or epoch < swa.start:
@@ -263,6 +269,7 @@ def train(
                     keep_last = False or save_all_checkpoints
         if distributed:
             torch.distributed.barrier()
+        if rank == 0: pbar.update()
         epoch += 1
 
     logging.info("Training complete")
@@ -283,7 +290,7 @@ def train_one_epoch(
     rank: Optional[int] = 0,
 ) -> None:
     model_to_train = model if distributed_model is None else distributed_model
-    for batch in data_loader:
+    for batch in tqdm(data_loader, desc="Steps", leave=False, miniters=100):
         _, opt_metrics = take_step(
             model=model_to_train,
             loss_fn=loss_fn,

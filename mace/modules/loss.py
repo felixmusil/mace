@@ -53,6 +53,13 @@ def weighted_mean_squared_virials(ref: Batch, pred: TensorDict) -> torch.Tensor:
 
 def mean_squared_error_forces(ref: Batch, pred: TensorDict) -> torch.Tensor:
     # forces: [n_atoms, 3]
+    return torch.mean(
+        ref.forces_weight
+        * torch.square(ref["forces"] - pred["forces"])
+    )  # []
+
+def weighted_mean_squared_error_forces(ref: Batch, pred: TensorDict) -> torch.Tensor:
+    # forces: [n_atoms, 3]
     configs_weight = torch.repeat_interleave(
         ref.weight, ref.ptr[1:] - ref.ptr[:-1]
     ).unsqueeze(
@@ -68,7 +75,6 @@ def mean_squared_error_forces(ref: Batch, pred: TensorDict) -> torch.Tensor:
         * configs_forces_weight
         * torch.square(ref["forces"] - pred["forces"])
     )  # []
-
 
 def weighted_mean_squared_error_dipole(ref: Batch, pred: TensorDict) -> torch.Tensor:
     # dipole: [n_graphs, ]
@@ -181,7 +187,7 @@ class WeightedForcesLoss(torch.nn.Module):
         )
 
     def forward(self, ref: Batch, pred: TensorDict) -> torch.Tensor:
-        return self.forces_weight * mean_squared_error_forces(ref, pred)
+        return self.forces_weight * torch.square(ref["forces"] - pred["forces"]).mean()
 
     def __repr__(self):
         return f"{self.__class__.__name__}(" f"forces_weight={self.forces_weight:.3f})"

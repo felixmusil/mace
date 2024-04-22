@@ -78,7 +78,7 @@ class MACE(torch.nn.Module):
         if activation is None:
             activation = torch.nn.SiLU()
         self.activation = activation
-        
+
         if isinstance(correlation, int):
             correlation = [correlation] * num_interactions
         # Embedding
@@ -141,6 +141,7 @@ class MACE(torch.nn.Module):
 
         self.readouts = torch.nn.ModuleList()
         if num_interactions == 1:
+            hidden_irreps_out = str(hidden_irreps[0])
             self.readouts.append(NonLinearReadoutBlock(hidden_irreps_out, MLP_irreps, gate))
         else:
             self.readouts.append(LinearReadoutBlock(hidden_irreps))
@@ -276,7 +277,7 @@ class MACE(torch.nn.Module):
         total_energy = torch.sum(contributions, dim=-1)  # [n_graphs, ]
         node_energy_contributions = torch.stack(node_energies_list, dim=-1)
         node_energy = torch.sum(node_energy_contributions, dim=-1)  # [n_nodes, ]
-
+        # node_energy = self.scale_shift(node_energy)
         # Outputs
         forces, virials, stress = get_outputs(
             energy=total_energy,

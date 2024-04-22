@@ -7,7 +7,7 @@
 import argparse
 import os
 import ast
-from typing import Optional
+from typing import Optional, Union, List
 
 
 def build_default_arg_parser() -> argparse.ArgumentParser:
@@ -758,6 +758,34 @@ def check_float_or_none(value: str) -> Optional[float]:
 def build_h5_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
 
+    parser.add_argument(
+        "--distributed",
+        help="train in multi-GPU data parallel mode",
+        action="store_true",
+        default=False,
+    )
+
+    parser.add_argument(
+        "--pair_repulsion",
+        help="",
+        action="store_true",
+        default=False,
+    )
+
+    parser.add_argument(
+        "--distance_transform",
+        help="use distance transform for radial basis functions",
+        default="None",
+        choices=["None", "Agnesi", "Soft"],
+    )
+
+    parser.add_argument(
+        "--save_all_checkpoints",
+        help="save all checkpoints",
+        action="store_true",
+        default=False,
+    )
+
     parser.add_argument('--atom_types', nargs='+', type=int,  help='list of atom types, e.g. `0 1 2 3 4`', required=True)
 
     parser.add_argument('--h5_config_fn', type=str,  help='', required=True)
@@ -804,7 +832,7 @@ def build_h5_arg_parser() -> argparse.ArgumentParser:
         "--error_table",
         help="Type of error table produced at the end of the training",
         type=str,
-        choices=["PerAtomRMSE", "TotalRMSE", "PerAtomMAE", "TotalMAE"],
+        choices=["PerAtomRMSE", "TotalRMSE", "PerAtomMAE", "TotalMAE", "ForceRMSE"],
         default="PerAtomRMSE",
     )
 
@@ -823,7 +851,14 @@ def build_h5_arg_parser() -> argparse.ArgumentParser:
         help="type of radial basis functions",
         type=str,
         default="bessel",
-        choices=["bessel", "gaussian"],
+        choices=["bessel", "gaussian", "chebyshev", "expnorm"],
+    )
+    parser.add_argument(
+        "--cutoff_type",
+        help="type of radial basis functions",
+        type=str,
+        default="polynomial",
+        choices=["polynomial", "cos"],
     )
     parser.add_argument(
         "--num_radial_basis",
