@@ -57,10 +57,13 @@ class MACE(torch.nn.Module):
         atomic_numbers: List[int],
         correlation: Union[int, List[int]],
         gate: Optional[Callable],
+        activation: Optional[torch.nn.Module] = None,
         pair_repulsion: bool = False,
         distance_transform: str = "None",
         radial_MLP: Optional[List[int]] = None,
         radial_type: Optional[str] = "bessel",
+        cutoff_type: Optional[str] = "polynomial",
+        use_linear_readout:Optional[bool] = False,
     ):
         super().__init__()
         self.register_buffer(
@@ -72,6 +75,10 @@ class MACE(torch.nn.Module):
         self.register_buffer(
             "num_interactions", torch.tensor(num_interactions, dtype=torch.int64)
         )
+        if activation is None:
+            activation = torch.nn.SiLU()
+        self.activation = activation
+        
         if isinstance(correlation, int):
             correlation = [correlation] * num_interactions
         # Embedding
@@ -85,6 +92,7 @@ class MACE(torch.nn.Module):
             num_bessel=num_bessel,
             num_polynomial_cutoff=num_polynomial_cutoff,
             radial_type=radial_type,
+            cutoff_type=cutoff_type,
             distance_transform=distance_transform,
         )
         edge_feats_irreps = o3.Irreps(f"{self.radial_embedding.out_dim}x0e")
@@ -111,6 +119,7 @@ class MACE(torch.nn.Module):
             target_irreps=interaction_irreps,
             hidden_irreps=hidden_irreps,
             avg_num_neighbors=avg_num_neighbors,
+            activation=activation,
             radial_MLP=radial_MLP,
         )
         self.interactions = torch.nn.ModuleList([inter])
@@ -131,7 +140,10 @@ class MACE(torch.nn.Module):
         self.products = torch.nn.ModuleList([prod])
 
         self.readouts = torch.nn.ModuleList()
-        self.readouts.append(LinearReadoutBlock(hidden_irreps))
+        if num_interactions == 1:
+            self.readouts.append(NonLinearReadoutBlock(hidden_irreps_out, MLP_irreps, gate))
+        else:
+            self.readouts.append(LinearReadoutBlock(hidden_irreps))
 
         for i in range(num_interactions - 1):
             if i == num_interactions - 2:
@@ -148,6 +160,7 @@ class MACE(torch.nn.Module):
                 target_irreps=interaction_irreps,
                 hidden_irreps=hidden_irreps_out,
                 avg_num_neighbors=avg_num_neighbors,
+                activation=activation,
                 radial_MLP=radial_MLP,
             )
             self.interactions.append(inter)
@@ -159,12 +172,15 @@ class MACE(torch.nn.Module):
                 use_sc=True,
             )
             self.products.append(prod)
-            if i == num_interactions - 2:
-                self.readouts.append(
-                    NonLinearReadoutBlock(hidden_irreps_out, MLP_irreps, gate)
-                )
-            else:
+            if use_linear_readout:
                 self.readouts.append(LinearReadoutBlock(hidden_irreps))
+            else:
+                if i == num_interactions - 2:
+                    self.readouts.append(
+                        NonLinearReadoutBlock(hidden_irreps_out, MLP_irreps, gate)
+                    )
+                else:
+                    self.readouts.append(LinearReadoutBlock(hidden_irreps))
 
     def forward(
         self,
@@ -266,7 +282,7 @@ class MACE(torch.nn.Module):
             energy=total_energy,
             positions=data["positions"],
             displacement=displacement,
-            cell=data["cell"],
+            cell=data.get("cell", None),
             training=training,
             compute_force=compute_force,
             compute_virials=compute_virials,
@@ -392,7 +408,7 @@ class ScaleShiftMACE(MACE):
             energy=inter_e,
             positions=data["positions"],
             displacement=displacement,
-            cell=data["cell"],
+            cell=data.get("cell", None),
             training=training,
             compute_force=compute_force,
             compute_virials=compute_virials,

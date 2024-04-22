@@ -25,6 +25,8 @@ from .radial import (
     BesselBasis,
     ChebychevBasis,
     GaussianBasis,
+    ExpNormalBasis,
+    CosineCutoff,
     PolynomialCutoff,
     SoftTransform,
 )
@@ -158,15 +160,29 @@ class RadialEmbeddingBlock(torch.nn.Module):
         num_bessel: int,
         num_polynomial_cutoff: int,
         radial_type: str = "bessel",
+        cutoff_type: str = "polynomial",
         distance_transform: str = "None",
     ):
         super().__init__()
+
+        if cutoff_type == "polynomial":
+            self.cutoff_fn = PolynomialCutoff(r_max=r_max, p=num_polynomial_cutoff)
+        elif cutoff_type == "cos":
+            self.cutoff_fn = CosineCutoff(r_max=r_max)
+        else:
+            raise NotImplementedError(f"cutoff_type={cutoff_type}")
+
         if radial_type == "bessel":
             self.bessel_fn = BesselBasis(r_max=r_max, num_basis=num_bessel)
         elif radial_type == "gaussian":
             self.bessel_fn = GaussianBasis(r_max=r_max, num_basis=num_bessel)
         elif radial_type == "chebyshev":
             self.bessel_fn = ChebychevBasis(r_max=r_max, num_basis=num_bessel)
+        elif radial_type == "expnorm":
+            self.bessel_fn = ExpNormalBasis(r_max=r_max, num_basis=num_bessel)
+        else:
+            raise NotImplementedError(f"radial_type={radial_type} ")
+
         if distance_transform == "Agnesi":
             self.distance_transform = AgnesiTransform()
         elif distance_transform == "Soft":
@@ -240,7 +256,9 @@ class InteractionBlock(torch.nn.Module):
         target_irreps: o3.Irreps,
         hidden_irreps: o3.Irreps,
         avg_num_neighbors: float,
+        activation:Optional[torch.nn.Module] = None,
         radial_MLP: Optional[List[int]] = None,
+        identity_update: Optional[bool] = False,
     ) -> None:
         super().__init__()
         self.node_attrs_irreps = node_attrs_irreps
@@ -250,6 +268,11 @@ class InteractionBlock(torch.nn.Module):
         self.target_irreps = target_irreps
         self.hidden_irreps = hidden_irreps
         self.avg_num_neighbors = avg_num_neighbors
+        # to do: x = W'x + Wh if false or x = x + Wh if true
+        self.identity_update = identity_update
+        if activation is None:
+            activation = torch.nn.SiLU()
+        self.activation = activation
         if radial_MLP is None:
             radial_MLP = [64, 64, 64]
         self.radial_MLP = radial_MLP
@@ -272,10 +295,10 @@ class InteractionBlock(torch.nn.Module):
         raise NotImplementedError
 
 
-nonlinearities = {1: torch.nn.functional.silu, -1: torch.tanh}
+nonlinearities = {1: torch.nn.SiLU(), -1: torch.nn.Tanh()}
 
 
-@compile_mode("script")
+# @compile_mode("script")
 class TensorProductWeightsBlock(torch.nn.Module):
     def __init__(self, num_elements: int, num_edge_feats: int, num_feats_out: int):
         super().__init__()
@@ -303,7 +326,7 @@ class TensorProductWeightsBlock(torch.nn.Module):
         )
 
 
-@compile_mode("script")
+# @compile_mode("script")
 class ResidualElementDependentInteractionBlock(InteractionBlock):
     def _setup(self) -> None:
         self.linear_up = o3.Linear(
@@ -367,7 +390,7 @@ class ResidualElementDependentInteractionBlock(InteractionBlock):
         return message + sc  # [n_nodes, irreps]
 
 
-@compile_mode("script")
+# @compile_mode("script")
 class AgnosticNonlinearInteractionBlock(InteractionBlock):
     def _setup(self) -> None:
         self.linear_up = o3.Linear(
@@ -433,7 +456,7 @@ class AgnosticNonlinearInteractionBlock(InteractionBlock):
         return message  # [n_nodes, irreps]
 
 
-@compile_mode("script")
+# @compile_mode("script")
 class AgnosticResidualNonlinearInteractionBlock(InteractionBlock):
     def _setup(self) -> None:
         # First linear
@@ -501,7 +524,7 @@ class AgnosticResidualNonlinearInteractionBlock(InteractionBlock):
         return message  # [n_nodes, irreps]
 
 
-@compile_mode("script")
+# @compile_mode("script")
 class RealAgnosticInteractionBlock(InteractionBlock):
     def _setup(self) -> None:
         # First linear
@@ -530,7 +553,7 @@ class RealAgnosticInteractionBlock(InteractionBlock):
         input_dim = self.edge_feats_irreps.num_irreps
         self.conv_tp_weights = nn.FullyConnectedNet(
             [input_dim] + self.radial_MLP + [self.conv_tp.weight_numel],
-            torch.nn.functional.silu,
+            self.activation,
         )
 
         # Linear
@@ -573,7 +596,26 @@ class RealAgnosticInteractionBlock(InteractionBlock):
         )  # [n_nodes, channels, (lmax + 1)**2]
 
 
-@compile_mode("script")
+# @compile_mode("script")
+class padded_skip(torch.nn.Module):
+    def __init__(self, irreps_in: o3.Irreps, irreps_out: o3.Irreps) -> None:
+        super().__init__()
+        self.in_dim = o3.Irreps(irreps_in).dim
+        self.out_dim = o3.Irreps(irreps_out).dim
+        self.pad = True
+        if self.in_dim >= self.out_dim:
+            self.pad = False
+
+    def forward(self, tensor: torch.Tensor, aux: Optional[torch.Tensor] = None) -> torch.Tensor:
+        batch, _ = tensor.shape
+        if self.pad:
+            template = torch.zeros(batch, self.out_dim, device=tensor.device)
+            template[:, :self.in_dim] = tensor
+            return template
+        else:
+            return tensor[:, :self.out_dim]
+
+# @compile_mode("script")
 class RealAgnosticResidualInteractionBlock(InteractionBlock):
     def _setup(self) -> None:
         # First linear
@@ -602,7 +644,7 @@ class RealAgnosticResidualInteractionBlock(InteractionBlock):
         input_dim = self.edge_feats_irreps.num_irreps
         self.conv_tp_weights = nn.FullyConnectedNet(
             [input_dim] + self.radial_MLP + [self.conv_tp.weight_numel],
-            torch.nn.functional.silu,
+            self.activation,
         )
 
         # Linear
@@ -613,9 +655,17 @@ class RealAgnosticResidualInteractionBlock(InteractionBlock):
         )
 
         # Selector TensorProduct
-        self.skip_tp = o3.FullyConnectedTensorProduct(
-            self.node_feats_irreps, self.node_attrs_irreps, self.hidden_irreps
-        )
+        if self.identity_update:
+            # make it compatible with max_L > 0 by padding x
+            # x_out should have dim of [n_atom, self.hidden_irreps.dim] with zeros if x.shape[-1] < self.hidden_irreps.dim
+            self.skip_tp = padded_skip(
+                self.node_feats_irreps, self.hidden_irreps
+            )
+        else:
+            self.skip_tp = o3.FullyConnectedTensorProduct(
+                self.node_feats_irreps, self.node_attrs_irreps, self.hidden_irreps
+            )
+
         self.reshape = reshape_irreps(self.irreps_out)
 
     def forward(
@@ -684,7 +734,7 @@ class RealAgnosticAttResidualInteractionBlock(InteractionBlock):
         )
         self.conv_tp_weights = nn.FullyConnectedNet(
             [input_dim] + 3 * [256] + [self.conv_tp.weight_numel],
-            torch.nn.functional.silu,
+            self.activation,
         )
 
         # Linear

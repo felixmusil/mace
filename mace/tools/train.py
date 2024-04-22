@@ -172,9 +172,9 @@ def train(
             if epoch > start_epoch:
                 swa.scheduler.step()
 
-        # Train
-        if distributed:
-            train_sampler.set_epoch(epoch)
+        # # Train
+        # if distributed:
+        #     train_sampler.set_epoch(epoch)
 
         train_one_epoch(
             model=model,
