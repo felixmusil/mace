@@ -23,6 +23,8 @@ from torch.optim.swa_utils import SWALR, AveragedModel
 from torch_ema import ExponentialMovingAverage
 from torch.utils.data.dataloader import default_collate
 
+
+
 import mace
 from mace import data, modules, tools
 from mace.tools import torch_geometric
@@ -48,8 +50,8 @@ from mace.tools import (
 from mace.tools.torch_geometric import Batch, Data
 
 
-# import sys
-# sys.path.insert(0, '/home/bepmusil/git/mlcg-tools/')
+import sys
+sys.path.insert(0, '/home/bepmusil/git/test/mlcg-tools/')
 from mlcg.utils import load_yaml
 from mlcg.pl import H5DataModule
 from mlcg.data import AtomicData as MLCGData
@@ -560,7 +562,7 @@ def main() -> None:
         param.requires_grad = False
     table = create_error_table(
         table_type=args.error_table,
-        all_loaders=all_data_loaders,
+        all_data_loaders=all_data_loaders,
         model=model,
         loss_fn=loss_fn,
         output_args=output_args,

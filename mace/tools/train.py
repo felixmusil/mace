@@ -9,6 +9,7 @@ import logging
 import time
 from contextlib import nullcontext
 from typing import Any, Dict, List, Optional, Tuple, Union
+import os.path as osp
 
 import numpy as np
 import torch
@@ -199,6 +200,11 @@ def train(
         if distributed:
             torch.distributed.barrier()
 
+        if rank == 0:
+            model_path = osp.join(checkpoint_handler.io.directory,'last.ckpt')
+            logging.info(f"Saving model epoch '{epoch}' to {model_path}")
+            torch.save(model.to("cpu"), model_path)
+
         # Validate
         if epoch % eval_interval == 0:
             model_to_evaluate = (
@@ -290,7 +296,8 @@ def train_one_epoch(
     rank: Optional[int] = 0,
 ) -> None:
     model_to_train = model if distributed_model is None else distributed_model
-    for batch in tqdm(data_loader, desc="Steps", leave=False, miniters=100):
+    if rank == 0: pbar = tqdm(len(data_loader), desc="Steps", leave=False, mininterval=30)
+    for batch in data_loader:
         _, opt_metrics = take_step(
             model=model_to_train,
             loss_fn=loss_fn,
@@ -305,6 +312,7 @@ def train_one_epoch(
         opt_metrics["epoch"] = epoch
         if rank == 0:
             logger.log(opt_metrics)
+            pbar.update()
 
 
 def take_step(
