@@ -64,6 +64,7 @@ class MACE(torch.nn.Module):
         radial_type: Optional[str] = "bessel",
         cutoff_type: Optional[str] = "polynomial",
         use_linear_readout:Optional[bool] = False,
+        use_only_last_features: Optional[bool] = False,
     ):
         super().__init__()
         self.register_buffer(
@@ -78,6 +79,8 @@ class MACE(torch.nn.Module):
         if activation is None:
             activation = torch.nn.SiLU()
         self.activation = activation
+
+        self.use_only_last_features = use_only_last_features
 
         if isinstance(correlation, int):
             correlation = [correlation] * num_interactions
@@ -140,11 +143,16 @@ class MACE(torch.nn.Module):
         self.products = torch.nn.ModuleList([prod])
 
         self.readouts = torch.nn.ModuleList()
+
         if num_interactions == 1:
             hidden_irreps_out = str(hidden_irreps[0])
-            self.readouts.append(NonLinearReadoutBlock(hidden_irreps_out, MLP_irreps, gate))
+            readout = NonLinearReadoutBlock(hidden_irreps_out, MLP_irreps, gate)
         else:
-            self.readouts.append(LinearReadoutBlock(hidden_irreps))
+            if self.use_only_last_features:
+                readout = None
+            else:
+                readout = LinearReadoutBlock(hidden_irreps)
+        self.readouts.append(readout)
 
         for i in range(num_interactions - 1):
             if i == num_interactions - 2:
@@ -153,6 +161,14 @@ class MACE(torch.nn.Module):
                 )  # Select only scalars for last layer
             else:
                 hidden_irreps_out = hidden_irreps
+
+            if use_linear_readout:
+                readout = LinearReadoutBlock(hidden_irreps)
+            elif self.use_only_last_features and i != num_interactions - 2:
+                readout = None
+            else:
+                readout = NonLinearReadoutBlock(hidden_irreps_out, MLP_irreps, gate)
+
             inter = interaction_cls(
                 node_attrs_irreps=node_attr_irreps,
                 node_feats_irreps=hidden_irreps,
@@ -173,15 +189,7 @@ class MACE(torch.nn.Module):
                 use_sc=True,
             )
             self.products.append(prod)
-            if use_linear_readout:
-                self.readouts.append(LinearReadoutBlock(hidden_irreps))
-            else:
-                if i == num_interactions - 2:
-                    self.readouts.append(
-                        NonLinearReadoutBlock(hidden_irreps_out, MLP_irreps, gate)
-                    )
-                else:
-                    self.readouts.append(LinearReadoutBlock(hidden_irreps))
+            self.readouts.append(readout)
 
     def forward(
         self,
@@ -262,7 +270,15 @@ class MACE(torch.nn.Module):
                 node_attrs=data["node_attrs"],
             )
             node_feats_list.append(node_feats)
-            node_energies = readout(node_feats).squeeze(-1)  # [n_nodes, ]
+            if not self.use_only_last_features:
+                node_energies = readout(node_feats).squeeze(-1)  # [n_nodes, ]
+                energy = scatter_sum(
+                    src=node_energies, index=data["batch"], dim=-1, dim_size=num_graphs
+                )  # [n_graphs,]
+                energies.append(energy)
+                node_energies_list.append(node_energies)
+        if self.use_only_last_features:
+            node_energies = self.readouts[-1](node_feats).squeeze(-1)  # [n_nodes, ]
             energy = scatter_sum(
                 src=node_energies, index=data["batch"], dim=-1, dim_size=num_graphs
             )  # [n_graphs,]
@@ -387,7 +403,10 @@ class ScaleShiftMACE(MACE):
                 node_feats=node_feats, sc=sc, node_attrs=data["node_attrs"]
             )
             node_feats_list.append(node_feats)
-            node_es_list.append(readout(node_feats).squeeze(-1))  # {[n_nodes, ], }
+            if not self.use_only_last_features:
+                node_es_list.append(readout(node_feats).squeeze(-1))  # {[n_nodes, ], }
+        if self.use_only_last_features:
+            node_es_list.append(self.readouts(node_feats).squeeze(-1))
         # Concatenate node features
         node_feats_out = torch.cat(node_feats_list, dim=-1)
         # print("node_es_list", node_es_list)
