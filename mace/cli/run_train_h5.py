@@ -51,7 +51,6 @@ from mace.tools.torch_geometric import Batch, Data
 
 
 import sys
-sys.path.insert(0, '/home/bepmusil/git/test/mlcg-tools/')
 from mlcg.utils import load_yaml
 from mlcg.pl import H5DataModule
 from mlcg.data import AtomicData as MLCGData
@@ -511,6 +510,7 @@ def main() -> None:
 
     if args.distributed:
         distributed_model = DDP(model, device_ids=[local_rank])
+        distributed_model.to(device)
     else:
         distributed_model = None
 
