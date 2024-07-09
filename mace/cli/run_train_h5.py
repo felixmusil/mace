@@ -259,14 +259,14 @@ def main() -> None:
         config_type_weights = {"Default": 1.0}
 
     h5_config = load_yaml(args.h5_config_fn)
-    print("####################")
-    print(h5_config)
+    # print("####################")
+    # print(h5_config)
 
     # Atomic number table
     # yapf: disable
-    print("args.atom_types",args.atom_types)
+    # print("args.atom_types",args.atom_types)
     unique_atom_types = np.unique(args.atom_types)
-    print("unique_atom_tags",unique_atom_types)
+    # print("unique_atom_tags",unique_atom_types)
     z_table = tools.get_atomic_number_table_from_zs(
         unique_atom_types
     )
