@@ -59,7 +59,7 @@ class CheckpointIO:
         self.keep = keep
         self.old_path: Optional[str] = None
         self.swa_start = swa_start
-
+        os.makedirs(self.directory, exist_ok=True)
         self._epochs_string = "_epoch-"
         self._filename_extension = "pt"
 
