@@ -153,7 +153,7 @@ def train(
     param_context = ema.average_parameters() if ema is not None else nullcontext()
     with param_context:
         valid_loss, eval_metrics = evaluate(
-            model=model,
+            model=distributed_model,
             loss_fn=loss_fn,
             data_loader=valid_loader,
             output_args=output_args,
@@ -203,6 +203,7 @@ def train(
         if rank == 0:
             model_path = osp.join(checkpoint_handler.io.directory,'last.ckpt')
             logging.info(f"Saving model epoch '{epoch}' to {model_path}")
+            # seems like this move to cpu has a side effect...
             torch.save(model.to("cpu"), model_path)
 
         # Validate
@@ -296,7 +297,7 @@ def train_one_epoch(
     rank: Optional[int] = 0,
 ) -> None:
     model_to_train = model if distributed_model is None else distributed_model
-    if rank == 0: pbar = tqdm(len(data_loader), desc="Steps", leave=False, mininterval=30)
+    if rank == 0: pbar = tqdm(data_loader, desc="Steps", leave=False, mininterval=30)
     for batch in data_loader:
         _, opt_metrics = take_step(
             model=model_to_train,
@@ -362,9 +363,10 @@ def evaluate(
 ) -> Tuple[float, Dict[str, Any]]:
     for param in model.parameters():
         param.requires_grad = False
-
+    model.eval()
+    model.to(device)
     metrics = MACELoss(loss_fn=loss_fn).to(device)
-
+    
     start_time = time.time()
     for batch in data_loader:
         batch = batch.to(device)
@@ -384,7 +386,7 @@ def evaluate(
 
     for param in model.parameters():
         param.requires_grad = True
-
+    model.train()
     return avg_loss, aux
 
 
